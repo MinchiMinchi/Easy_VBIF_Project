@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Voronoi Editor</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/d3-delaunay@6"></script>
+  <style>
+    canvas { border: 1px solid #ccc; background: #fff; }
+    #controls { margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <canvas id="canvas" width="600" height="600"></canvas>
+
+  <div id="controls">
+    ラベル: <input type="text" id="labelInput" />
+    <button onclick="saveJSON()">💾 Save</button>
+    <input type="file" id="fileInput" onchange="loadJSON(event)" />
+    背景画像: <input type="file" id="bgInput" accept="image/*" />
+  </div>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const width = canvas.width;
+    const height = canvas.height;
+
+    let bgImage = null;
+
+    let points = [
+      { x: 100, y: 100, label: "00", included: true },
+      { x: 200, y: 100, label: "01", included: true },
+      { x: 300, y: 100, label: "02", included: true },
+      { x: 100, y: 300, label: "03", included: true },
+      { x: 200, y: 300, label: "04", included: true },
+      { x: 300, y: 300, label: "05", included: true }
+    ];
+
+    let dragging = null;
+    let selected = null;
+
+    canvas.addEventListener('mousedown', (e) => {
+      const { offsetX, offsetY, button } = e;
+      for (let i = 0; i < points.length; i++) {
+        const p = points[i];
+        if ((p.x - offsetX) ** 2 + (p.y - offsetY) ** 2 < 100) {
+          if (button === 2) {
+            p.included = !p.included;
+            draw();
+            return;
+          } else {
+            dragging = i;
+            selected = i;
+            document.getElementById('labelInput').value = p.label;
+            break;
+          }
+        }
+      }
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+      if (dragging !== null) {
+        points[dragging].x = e.offsetX;
+        points[dragging].y = e.offsetY;
+        draw();
+      }
+    });
+
+    canvas.addEventListener('mouseup', () => dragging = null);
+    canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+    document.getElementById('labelInput').addEventListener('input', e => {
+      if (selected !== null) {
+        points[selected].label = e.target.value;
+        draw();
+      }
+    });
+
+    document.getElementById('bgInput').addEventListener('change', e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          bgImage = img;
+          draw();
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    function draw() {
+      ctx.clearRect(0, 0, width, height);
+
+      if (bgImage) {
+        ctx.drawImage(bgImage, 0, 0, width, height);
+      }
+
+      const includedPoints = points.filter(p => p.included);
+      if (includedPoints.length >= 3) {
+        const delaunay = d3.Delaunay.from(includedPoints, d => d.x, d => d.y);
+        const voronoi = delaunay.voronoi([0, 0, width, height]);
+
+        // 総面積（正規化用）
+        const totalArea = width * height;
+
+        for (let i = 0; i < includedPoints.length; i++) {
+          const cell = voronoi.cellPolygon(i);
+          if (!cell) continue;
+
+          ctx.beginPath();
+          ctx.moveTo(cell[0][0], cell[0][1]);
+          for (let j = 1; j < cell.length; j++) {
+            ctx.lineTo(cell[j][0], cell[j][1]);
+          }
+          ctx.closePath();
+          ctx.strokeStyle = "red";
+          ctx.lineWidth = 2;
+          ctx.stroke();
+
+          // 面積の重心を計算して表示
+          const area = polygonArea(cell);
+          const [cx, cy] = centroid(cell);
+          ctx.fillStyle = "darkblue";
+          ctx.font = "12px sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText((area / totalArea).toFixed(3), cx, cy + 15);
+        }
+      }
+
+      for (let p of points) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 10, 0, 2 * Math.PI);
+        ctx.fillStyle = p.included ? "black" : "lightgray";
+        ctx.fill();
+        ctx.fillStyle = p.included ? "white" : "gray";
+        ctx.font = "12px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(p.label, p.x, p.y);
+      }
+    }
+
+    function polygonArea(pts) {
+      let a = 0;
+      for (let i = 0; i < pts.length; i++) {
+        const [x1, y1] = pts[i];
+        const [x2, y2] = pts[(i + 1) % pts.length];
+        a += (x1 * y2 - x2 * y1);
+      }
+      return Math.abs(a / 2);
+    }
+
+    function centroid(pts) {
+      let x = 0, y = 0;
+      for (let [px, py] of pts) {
+        x += px;
+        y += py;
+      }
+      return [x / pts.length, y / pts.length];
+    }
+
+    function saveJSON() {
+      const blob = new Blob([JSON.stringify(points, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "voronoi_data.json";
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function loadJSON(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = e => {
+        try {
+          const data = JSON.parse(e.target.result);
+          points = data;
+          draw();
+        } catch (err) {
+          alert("読み込み失敗");
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    draw();
+  </script>
+</body>
+</html>
