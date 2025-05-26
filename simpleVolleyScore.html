@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>バレーボール点示ソフト（JS版）</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 0;
+      padding: 10px;
+      text-align: center;
+    }
+    .court-container {
+      display: flex;
+      justify-content: space-around;
+      margin-top: 20px;
+    }
+    .team {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .team-name {
+      font-size: 20px;
+      font-weight: bold;
+      margin-bottom: 5px;
+      cursor: pointer;
+    }
+    .score {
+      font-size: 32px;
+      margin: 5px;
+    }
+    .set-count {
+      font-size: 18px;
+      margin: 5px;
+      cursor: pointer;
+    }
+    .court {
+      display: grid;
+      grid-template-columns: 60px 60px;
+      grid-template-rows: 60px 60px 60px;
+      gap: 5px;
+      margin-bottom: 10px;
+    }
+    .player {
+      background-color: orange;
+      font-size: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .server {
+      background-color: red;
+      color: white;
+      font-weight: bold;
+      border: 3px solid white;
+    }
+    button {
+      margin: 5px;
+      font-size: 18px;
+    }
+  </style>
+</head>
+<body>
+
+<h2>バレーボール 点示ソフト</h2>
+<div>
+  <button onclick="addPoint('A')">Team A +</button>
+  <span class="set-count" onclick="editSet()">セット: <span id="set-count">1</span></span>
+  <button onclick="addPoint('B')">Team B +</button>
+  <button onclick="undo()">Undo</button>
+</div>
+
+<div class="court-container">
+  <!-- Aチーム -->
+  <div class="team">
+    <div id="teamA-name" class="team-name" onclick="editTeamName('A')">Team A</div>
+    <div id="scoreA" class="score">0</div>
+    <div id="courtA" class="court"></div>
+  </div>
+
+  <!-- Bチーム -->
+  <div class="team">
+    <div id="teamB-name" class="team-name" onclick="editTeamName('B')">Team B</div>
+    <div id="scoreB" class="score">0</div>
+    <div id="courtB" class="court"></div>
+  </div>
+</div>
+
+<script>
+  let teamA = ["1", "2", "3", "4", "5", "6"];
+  let teamB = ["1", "2", "3", "4", "5", "6"];
+
+  const teamAPos = [[2,0],[2,1],[1,1],[0,1],[0,0],[1,0]];
+  const teamBPos = [[0,1],[0,0],[1,0],[2,0],[2,1],[1,1]];
+
+  let teamAName = "Team A";
+  let teamBName = "Team B";
+
+  let scoreA = 0;
+  let scoreB = 0;
+  let serverTeam = "A";
+  let setCount = 1;
+  let history = [];
+
+  function render() {
+    document.getElementById("teamA-name").textContent = teamAName;
+    document.getElementById("teamB-name").textContent = teamBName;
+    renderTeam("A", teamA, teamAPos, document.getElementById("courtA"));
+    renderTeam("B", teamB, teamBPos, document.getElementById("courtB"));
+    document.getElementById("scoreA").textContent = scoreA;
+    document.getElementById("scoreB").textContent = scoreB;
+    document.getElementById("set-count").textContent = setCount;
+  }
+
+  function renderTeam(team, players, positions, container) {
+    container.innerHTML = "";
+    for (let i = 0; i < 6; i++) {
+      const div = document.createElement("div");
+      div.className = "player";
+      div.textContent = players[i];
+      if (serverTeam === team && i === 0) {
+        div.classList.add("server");
+      }
+      div.onclick = () => {
+        const newNum = prompt("新しい背番号：", players[i]);
+        if (newNum) {
+          players[i] = newNum;
+          render();
+        }
+      };
+      div.style.gridRow = positions[i][0] + 1;
+      div.style.gridColumn = positions[i][1] + 1;
+      container.appendChild(div);
+    }
+  }
+
+  function rotate(teamArr) {
+    teamArr.push(teamArr.shift());
+  }
+
+  function saveState() {
+    history.push({
+      teamA: [...teamA],
+      teamB: [...teamB],
+      scoreA,
+      scoreB,
+      serverTeam,
+      setCount,
+      teamAName,
+      teamBName
+    });
+  }
+
+  function undo() {
+    if (history.length === 0) return;
+    const state = history.pop();
+    teamA = [...state.teamA];
+    teamB = [...state.teamB];
+    scoreA = state.scoreA;
+    scoreB = state.scoreB;
+    serverTeam = state.serverTeam;
+    setCount = state.setCount;
+    teamAName = state.teamAName;
+    teamBName = state.teamBName;
+    render();
+  }
+
+  function addPoint(team) {
+    saveState();
+    if (serverTeam === team) {
+      if (team === "A") scoreA++;
+      else scoreB++;
+    } else {
+      if (team === "A") {
+        scoreA++;
+        rotate(teamA);
+        serverTeam = "A";
+      } else {
+        scoreB++;
+        rotate(teamB);
+        serverTeam = "B";
+      }
+    }
+    render();
+  }
+
+  function editSet() {
+    const newSet = prompt("セット数を入力：", setCount);
+    if (newSet !== null && !isNaN(newSet)) {
+      setCount = parseInt(newSet);
+      render();
+    }
+  }
+
+  function editTeamName(team) {
+    const current = team === "A" ? teamAName : teamBName;
+    const name = prompt("チーム名を入力：", current);
+    if (name) {
+      if (team === "A") teamAName = name;
+      else teamBName = name;
+      render();
+    }
+  }
+
+  render();
+</script>
+
+</body>
+</html>
