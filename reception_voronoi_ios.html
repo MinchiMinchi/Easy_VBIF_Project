@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8" />
-  <title>Voronoi Editor</title>
+  <title>Voronoi Editor (Touch OK)</title>
   <script src="https://d3js.org/d3.v7.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/d3-delaunay@6"></script>
   <style>
@@ -38,6 +38,8 @@
 
     let dragging = null;
     let selected = null;
+    let longPressTimer = null;
+    const LONG_PRESS_MS = 500;
 
     // --- マウス操作 ---
     canvas.addEventListener('mousedown', (e) => {
@@ -56,16 +58,26 @@
     canvas.addEventListener('mouseup', () => dragging = null);
     canvas.addEventListener('contextmenu', e => e.preventDefault());
 
-    // --- タッチ操作対応 ---
+    // --- タッチ操作 ---
     canvas.addEventListener('touchstart', (e) => {
       e.preventDefault();
       const touch = e.touches[0];
       const pos = getTouchPos(touch);
-      handleStart(pos.x, pos.y, 0);
+
+      longPressTimer = setTimeout(() => {
+        toggleAtPoint(pos.x, pos.y);
+        longPressTimer = null;
+      }, LONG_PRESS_MS);
+
+      handleStart(pos.x, pos.y, 0); // 左ボタン相当
     }, { passive: false });
 
     canvas.addEventListener('touchmove', (e) => {
       e.preventDefault();
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
       if (dragging !== null) {
         const pos = getTouchPos(e.touches[0]);
         points[dragging].x = pos.x;
@@ -74,7 +86,13 @@
       }
     }, { passive: false });
 
-    canvas.addEventListener('touchend', () => dragging = null);
+    canvas.addEventListener('touchend', () => {
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+      dragging = null;
+    });
 
     function getTouchPos(touch) {
       const rect = canvas.getBoundingClientRect();
@@ -82,6 +100,16 @@
         x: touch.clientX - rect.left,
         y: touch.clientY - rect.top
       };
+    }
+
+    function toggleAtPoint(x, y) {
+      for (let p of points) {
+        if ((p.x - x) ** 2 + (p.y - y) ** 2 < 100) {
+          p.included = !p.included;
+          draw();
+          break;
+        }
+      }
     }
 
     function handleStart(x, y, button) {
