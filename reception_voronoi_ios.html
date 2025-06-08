@@ -183,7 +183,14 @@
           ctx.fillStyle = "darkblue";
           ctx.font = "12px sans-serif";
           ctx.textAlign = "center";
-          ctx.fillText((area / totalArea).toFixed(3), cx, cy + 15);
+          const px = points[i].x;
+          const py = points[i].y;
+          const distance = Math.sqrt((px - cx) ** 2 + (py - cy) ** 2);
+          if(distance < point_radius) {
+            ctx.fillText((area / totalArea).toFixed(3), cx, cy + point_radius + 30);
+          } else {
+            ctx.fillText((area / totalArea).toFixed(3), cx, cy);
+          }
         }
       }
 
